@@ -1,0 +1,23 @@
+{application, apns,
+ [
+  {description, "APNS Enhance for Erlang"},
+  {vsn, "1.0"},
+  {id, "apns_enhanced"},
+  {modules,      [tcp_server, tcp_supervisor, tcp_listen_handler, tcp_socket_handler, tcp_accept_handler, lib_protocol]},
+  {registered,   [tcp_listen_handler, tcp_accept_supervisor, tcp_socket_supervisor]},
+  {applications, [kernel, stdlib, ssl]},
+  %%
+  %% mod: Specify the module name to start the application, plus args
+  %%
+  {mod, {tcp_supervisor, []}},
+  {env, [{apple_host,       "gateway.sandbox.push.apple.com"},
+         {apple_port,       2195},
+         {cert_file,        "priv/cert.pem"},
+         {key_file,         undefined},
+         {timeout,          30000},
+         {feedback_host,    "feedback.sandbox.push.apple.com"},
+         {feedback_port,    2196},
+         {feedback_timeout, 600000} %% 10 Minutes}
+        ]}
+ ]
+}.
