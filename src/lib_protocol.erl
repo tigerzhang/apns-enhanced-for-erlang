@@ -83,14 +83,20 @@ protocol(Socket, _State, "apnse", Args) ->
 	apns:send_message(ConnId, DeviceToken, Alert, random:uniform(10), "chime"),
 	gen_tcp:send(Socket, io_lib:format("apns enhanced test ~p~n", [Pid]));
 protocol(Socket, State, "apnsm", Args) ->
-	[Name, DeviceToken, Alert, Badge1, Sound, Expiry1, ExtraArgs] = Args,
-	MngId = list_to_atom(Name),
-	apns_manager:start_manager(MngId),
-	{Badge, []} = string:to_integer(Badge1),
-	{Expiry2, []} = string:to_integer(Expiry1),
-	Expiry = apns:expiry(Expiry2),
-  {_, _, MicroSecs} = erlang:now(),
-	apns_manager:send_message(MngId, apns:message_id(), DeviceToken, Alert, Badge, Sound, Expiry, [{<<"acme2">>, <<"x">>}]).
+  try
+  	[Name, DeviceToken, Alert, Badge1, Sound, Expiry1, ExtraArgs] = Args,
+  	MngId = list_to_atom(Name),
+  	apns_manager:start_manager(MngId),
+  	{Badge, []} = string:to_integer(Badge1),
+  	{Expiry2, []} = string:to_integer(Expiry1),  
+  	Expiry = apns:expiry(Expiry2),
+    {_, _, MicroSecs} = erlang:now(),
+    {struct, ExtraArgsJson} = mochijson2:decode(ExtraArgs),
+    apns_manager:send_message(MngId, apns:message_id(), DeviceToken, Alert,
+      Badge, Sound, Expiry, ExtraArgsJson)
+  catch
+    _:{Error, Reason} -> gen_tcp:send(Socket, io_lib:format("error ~p~n", [{Error, Reason}]))
+  end.
 
 message_id() ->
   {_, _, MicroSecs} = erlang:now(),

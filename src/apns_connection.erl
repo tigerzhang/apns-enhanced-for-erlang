@@ -15,6 +15,7 @@
 -export([start_link/1, start_link/2, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([send_message/2, stop/1]).
 -export([build_payload/1]).
+-export([send_message_block/2]).
 
 -record(state, {out_socket        :: tuple(),
                 in_socket         :: tuple(),
@@ -31,6 +32,10 @@
 -spec send_message(apns:conn_id(), #apns_msg{}) -> ok.
 send_message(ConnId, Msg) ->
   gen_server:cast(ConnId, Msg).
+
+-spec send_message_block(apns:conn_id(), #apns_msg{}) -> ok.
+send_message_block(ConnId, Msg) ->
+  gen_server:call(ConnId, Msg, infinity).
 
 %% @doc  Stops the connection
 -spec stop(apns:conn_id()) -> ok.
@@ -55,10 +60,7 @@ start_link(Connection) ->
 init(Connection) ->
   try
     case open_out(Connection) of
-      {ok, OutSocket} -> case open_feedback(Connection) of
-          {ok, InSocket} -> {ok, #state{out_socket=OutSocket, in_socket=InSocket, connection=Connection}};
-          {error, Reason} -> {stop, Reason}
-        end;
+      {ok, OutSocket} -> {ok, #state{out_socket=OutSocket, in_socket=undefined, connection=Connection}};
       {error, Reason} -> {stop, Reason}
     end
   catch
@@ -115,6 +117,31 @@ open_feedback(Connection) ->
 
 %% @hidden
 -spec handle_call(X, reference(), state()) -> {stop, {unknown_request, X}, {unknown_request, X}, state()}.
+handle_call(Msg, From, State = #state{out_socket=undefined, connection=Connection}) ->
+  try
+    error_logger:info_msg("Reconnecting to APNS...~n"),
+    case open_out(Connection) of
+      {ok, Socket} -> handle_call(Msg, From, State#state{out_socket=Socket});
+      {error, Reason} -> {stop, Reason, {error, Reason}, State}
+    end
+  catch
+    _:{error, Reason2} -> {stop, Reason2, {error, Reason2}, State}
+  end;
+
+handle_call(Msg, _From, State) when is_record(Msg, apns_msg) ->
+  Socket = State#state.out_socket,
+  Payload = build_payload(Msg),
+  BinToken = hexstr_to_bin(Msg#apns_msg.device_token),
+  case send_payload(Socket, Msg#apns_msg.id, Msg#apns_msg.expiry, BinToken, Payload) of
+    ok ->
+      {reply, ok, State};
+    {error, Reason} ->
+      error_logger:info_msg("send_payload failed for reason[~p].~n", [Reason]),
+      % {stop, Reason, {error, Reason}, State}
+      % ssl:close(State#state.out_socket),
+      {reply, {error, Reason}, State#state{out_socket=undefined}}
+  end; 
+
 handle_call(Request, _From, State) ->
   {stop, {unknown_request, Request}, {unknown_request, Request}, State}.
 
@@ -139,16 +166,7 @@ handle_cast(Msg, State) when is_record(Msg, apns_msg) ->
     ok ->
       {noreply, State};
     {error, Reason} ->
-      % try to reconnect
-      error_logger:info_msg("send_payload failed. Reconnecting to APNS...~n"),
-      try
-        case open_out(State#state.connection) of
-          {ok, Socket} -> gen_server:cast(self(), Msg);
-          {error, Reason} -> {stop, {error, Reason}, State}
-        end
-      catch
-        _:{error, Reason2} -> {stop, Reason2}
-      end
+      {stop, {error, Reason}, State}
   end;
 
 handle_cast(stop, State) ->
@@ -156,7 +174,7 @@ handle_cast(stop, State) ->
 
 %% @hidden
 -spec handle_info({ssl, tuple(), binary()} | {ssl_closed, tuple()} | X, state()) -> {noreply, state()} | {stop, ssl_closed | {unknown_request, X}, state()}.
-handle_info({ssl, SslSocket, Data}, State = #state{out_socket = SslSocket,
+handle_info({ssl, SslSocket, Data}, State = #state{
                                                    connection =
                                                      #apns_connection{error_fun = Error},
                                                    out_buffer = CurrentBuffer}) ->
@@ -183,28 +201,28 @@ handle_info({ssl, SslSocket, Data}, State = #state{out_socket = SslSocket,
     NextBuffer -> %% We need to wait for the rest of the message
       {noreply, State#state{out_buffer = NextBuffer}}
   end;
-handle_info({ssl, SslSocket, Data}, State = #state{in_socket  = SslSocket,
-                                                   connection =
-                                                     #apns_connection{feedback_fun = Feedback},
-                                                   in_buffer  = CurrentBuffer
-                                                  }) ->
-  case <<CurrentBuffer/binary, Data/binary>> of
-    <<TimeT:4/big-unsigned-integer-unit:8,
-      Length:2/big-unsigned-integer-unit:8,
-      Token:Length/binary,
-      Rest/binary>> ->
-      try Feedback({apns:timestamp(TimeT), bin_to_hexstr(Token)})
-      catch
-        _:Error ->
-          error_logger:error_msg("Error trying to inform feedback token ~p:~n\t~p~n", [Token, Error])
-      end,
-      case erlang:size(Rest) of
-        0 -> {noreply, State#state{in_buffer = <<>>}}; %% It was a whole package
-        _ -> handle_info({ssl, SslSocket, Rest}, State#state{in_buffer = <<>>})
-      end;
-    NextBuffer -> %% We need to wait for the rest of the message
-      {noreply, State#state{in_buffer = NextBuffer}}
-  end;
+% handle_info({ssl, SslSocket, Data}, State = #state{in_socket  = SslSocket,
+%                                                    connection =
+%                                                      #apns_connection{feedback_fun = Feedback},
+%                                                    in_buffer  = CurrentBuffer
+%                                                   }) ->
+%   case <<CurrentBuffer/binary, Data/binary>> of
+%     <<TimeT:4/big-unsigned-integer-unit:8,
+%       Length:2/big-unsigned-integer-unit:8,
+%       Token:Length/binary,
+%       Rest/binary>> ->
+%       try Feedback({apns:timestamp(TimeT), bin_to_hexstr(Token)})
+%       catch
+%         _:Error ->
+%           error_logger:error_msg("Error trying to inform feedback token ~p:~n\t~p~n", [Token, Error])
+%       end,
+%       case erlang:size(Rest) of
+%         0 -> {noreply, State#state{in_buffer = <<>>}}; %% It was a whole package
+%         _ -> handle_info({ssl, SslSocket, Rest}, State#state{in_buffer = <<>>})
+%       end;
+%     NextBuffer -> %% We need to wait for the rest of the message
+%       {noreply, State#state{in_buffer = NextBuffer}}
+%   end;
 
 handle_info({ssl_closed, SslSocket}, State = #state{in_socket = SslSocket,
                                                     connection= Connection}) ->
@@ -223,6 +241,11 @@ handle_info(reconnect, State = #state{connection = Connection}) ->
 handle_info({ssl_closed, SslSocket}, State = #state{out_socket = SslSocket}) ->
   error_logger:info_msg("APNS disconnected~n"),
   {noreply, State#state{out_socket=undefined}};
+
+handle_info({ssl_closed, SslSocke}, State) ->
+  % error_logger:info_msg("ssl_closed sock[~p] state[~p]~n", [SslSocke, State]),
+  error_logger:info_msg("APNS disconnected 2~n"),
+  {noreply, State};
 
 handle_info(Request, State) ->
   {stop, {unknown_request, Request}, State}.
@@ -288,8 +311,8 @@ send_payload(Socket, MsgId, Expiry, BinToken, Payload) ->
                 BinToken/binary,
                 PayloadLength:16/big,
                 BinPayload/binary>>],
-    error_logger:info_msg("Sending msg ~p (expires on ~p):~s~n~p~n",
-                         [MsgId, Expiry, BinPayload, Packet]),
+    error_logger:info_msg("Sending msg ~p(exp ~p):~s~n",
+                         [MsgId, Expiry, BinPayload]),
     ssl:send(Socket, Packet).
 
 hexstr_to_bin(S) ->

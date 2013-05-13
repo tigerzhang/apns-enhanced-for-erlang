@@ -50,7 +50,7 @@ init(MngId) ->
 handle_cast({sendmsg, MngId, MsgId, DeviceToken, Alert, Badge, Sound, Expiry, ExtraArgs}, State) ->
 	MessagesSent = [{MsgId, #apns_msg{id=MsgId, expiry=Expiry, device_token=DeviceToken, alert=Alert,
 	 							 badge=Badge, sound=Sound, extra=ExtraArgs}, 
-	 							 time_in_second()} | State#state.messages_sent],
+	 							 0} | State#state.messages_sent],
 	State1 = State#state{messages_sent = MessagesSent},
 	gen_server:cast(MngId, sendmsg),
 	{noreply, State1};
@@ -62,39 +62,45 @@ handle_cast(sendmsg, State) ->
 		if 
 			Len < CurrentMsgPos ->
 				{noreply, State};
+			CurrentMsgPos == 0 ->
+				{noreply, State#state{current_msg_pos=1}};
 			true ->
 				%% message to send
 				RevertMessagesSent = lists:reverse(State#state.messages_sent),
 
 				{Key, Msg, _} = lists:nth(CurrentMsgPos, RevertMessagesSent),
 
-				io:format("current_msg_pos ~p count of messages ~p~n", [CurrentMsgPos, Len]),
+				% io:format("current_msg_pos ~p count of messages ~p~n", [CurrentMsgPos, Len]),
 
 				%% calc the corresponding connection id
 				MngId = State#state.manager_id,
 				ConnId = manager_id_to_connection_id(MngId),
 
 				%% send the message out
-				io:format("try to connect: ~p~n",
-					[{ConnId, apns:connect(ConnId, fun log_error/3, fun log_feedback/1)}]),
+				apns:connect(ConnId, fun log_error/3, fun log_feedback/1),
 				case erlang:whereis(ConnId) of
 					undefined ->
 						throw(try_to_connnect_failed);
 					Pid ->
-						case erlang:is_process_alive(Pid) of
-							true ->
-								io:format("apns_connection alive: ~p ~p~n", [ConnId, Pid]);
-							false ->
-								io:format("apns_connection not alive:, ~p ~p~n", [ConnId, Pid])
-						end
+						noop
+						% case erlang:is_process_alive(Pid) of
+						% 	true ->
+						% 		io:format("apns_connection alive: ~p ~p~n", [ConnId, Pid]);
+						% 	false ->
+						% 		io:format("apns_connection not alive:, ~p ~p~n", [ConnId, Pid])
+						% end
 				end,
 
-				apns:send_message(ConnId, Msg),
-				MessagesSent2 = lists:keyreplace(Key, 1, State#state.messages_sent, {Key, Msg, time_in_second()}),
+				% send message synchronizely to make sure the message has been sent to APN Server 
+				State1 = case apns:send_message_block(ConnId, Msg) of
+					ok ->
+						MessagesSent2 = lists:keyreplace(Key, 1, State#state.messages_sent, {Key, Msg, time_in_second()}),
+						NextMessagePos = CurrentMsgPos + 1,
+						State#state{current_msg_pos = NextMessagePos, messages_sent = MessagesSent2};
+					_ ->
+						State
+				end,
 
-				NextMessagePos = CurrentMsgPos + 1,
-
-				State1 = State#state{current_msg_pos = NextMessagePos, messages_sent = MessagesSent2},
 				check_queued_messages(State1),
 
 				{noreply, State1}
@@ -134,6 +140,8 @@ find_message_id_backward(Messages, CurPos, MsgId) ->
 	Len = erlang:length(Messages),
 	{Pos, {_, Msg, _}} = 
 	if
+		Len == 0 ->
+			{error, not_found};
 		CurPos > Len ->
 			{Len, lists:nth(Len, Messages)};
 		CurPos < 1 ->
@@ -141,7 +149,7 @@ find_message_id_backward(Messages, CurPos, MsgId) ->
 		true ->
 			{CurPos, lists:nth(CurPos, Messages)}
 	end,
-	io:format("current pos: ~p message id: ~p, target message id: ~p~n", [Pos, Msg#apns_msg.id, MsgId]),
+	% io:format("current pos: ~p message id: ~p, target message id: ~p~n", [Pos, Msg#apns_msg.id, MsgId]),
 	if 
 		Msg#apns_msg.id == MsgId ->
 			{ok, Pos};
@@ -170,15 +178,21 @@ handle_info(trigger, State) ->
 	MessageTryToDeleteInOneLoop = 1,
 
 	%% delete the message and adjust the cursor
-	{RemainLoopCycle, RevertMessagesSent2} = do_remove_head_old_message(RevertMessagesSent, MessageTryToDeleteInOneLoop),
-	MessageDeletedCount = MessageTryToDeleteInOneLoop - RemainLoopCycle,
-	MessagesSent2 = lists:reverse(RevertMessagesSent2),
-	CurPos2 = State#state.current_msg_pos - MessageDeletedCount,
+	{CurPos, RevertMessagesSent3} = 
+	case do_remove_head_old_message(RevertMessagesSent, MessageTryToDeleteInOneLoop) of
+		{go_back_to_head, RevertMessagesSent2} ->
+			{1, RevertMessagesSent2};
+		{RemainLoopCycle, RevertMessagesSent2} ->
+			MessageDeletedCount = MessageTryToDeleteInOneLoop - RemainLoopCycle,
+			{State#state.current_msg_pos - MessageDeletedCount, RevertMessagesSent2}
+	end,
+	MessagesSent2 = lists:reverse(RevertMessagesSent3),
+		 
 
 	Pid = self(),
 	Len = erlang:length(MessagesSent2),
-	io:format("~p remove old message. current_msg_pos ~p count of messages ~p~n",
-		[Pid, CurPos2, Len]),
+	% io:format("~p remove old message. current_msg_pos ~p count of messages ~p~n",
+	% 	[Pid, CurPos2, Len]),
 
 	if
 		Len == 0 ->
@@ -186,13 +200,13 @@ handle_info(trigger, State) ->
 		Len > 0 ->
 			erlang:send_after(?INTERVAL, Pid, trigger)
 	end,
-	{noreply, State#state{messages_sent = MessagesSent2, current_msg_pos = CurPos2}};
+	{noreply, State#state{messages_sent = MessagesSent2, current_msg_pos = CurPos}};
 handle_info(Request, State) ->
   {stop, {unknown_request, Request}, State}.
 
 %% @hidden
 -spec terminate(term(), state()) -> ok.
-terminate(_Reason, State) -> 
+terminate(_Reason, _State) -> 
 	ok.
 
 %% @hidden
@@ -230,7 +244,7 @@ check_queued_messages(State) ->
 	{message_queue_len, MailboxQueueLen} = erlang:process_info(self(), message_queue_len),
 	MessageQueueLen = erlang:length(State#state.messages_sent),
 	MailboxMessageNeeded = (MessageQueueLen - State#state.current_msg_pos + 1),
-	io:format("mailbox length ~p, message needed ~p~n", [MailboxQueueLen, MailboxMessageNeeded]),
+	% io:format("mailbox length ~p, message needed ~p~n", [MailboxQueueLen, MailboxMessageNeeded]),
 
 	if 
 		MailboxMessageNeeded > MailboxQueueLen ->
@@ -252,16 +266,24 @@ do_remove_head_old_message(Messages, MaxInOneLoop) ->
 			{MaxInOneLoop, Messages};
 		true ->
 			[Head | Tail] = Messages,
-			{MsgId, _, Second} = Head,
-			Now = time_in_second(),
-			DeadLine = Second + (?INTERVAL/1000),
-			io:format("Now ~p DeadLine ~p~n", [Now, DeadLine]),
+			{MsgId, _, SentTime} = Head,
 			if
-				Now > DeadLine->
-					io:format("remove old message: ~p~p~n", [MsgId, Second]),
-					do_remove_head_old_message(Tail, MaxInOneLoop - 1);
+				SentTime == 0 ->
+					error_logger:info_msg("MsgId[~p] has not been sent yet.
+						[~p] messages left.~n", [MsgId, Len]),
+					gen_server:cast(self(), sendmsg),
+					{go_back_to_head, Messages};
 				true ->
-					io:format("remove old message: message ~p is still alive, give up.~n", [MsgId]),
-					{MaxInOneLoop, Messages}
+					Now = time_in_second(),
+					DeadLine = SentTime + (?INTERVAL/1000),
+					% io:format("Now ~p DeadLine ~p~n", [Now, DeadLine]),
+					if
+						Now > DeadLine ->
+							io:format("remove old message: ~p~p~n", [MsgId, SentTime]),
+							do_remove_head_old_message(Tail, MaxInOneLoop - 1);
+						true ->
+							io:format("remove old message: message ~p is still alive, give up.~n", [MsgId]),
+							{MaxInOneLoop, Messages}
+					end
 			end
 	end.

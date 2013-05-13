@@ -1,2 +1,4 @@
+.project
+.settings
 priv/cert.pem
 ebin/*

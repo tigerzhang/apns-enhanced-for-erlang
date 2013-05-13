@@ -53,7 +53,7 @@ start_manager(ConnId) ->
 init([]) ->
     Connection = {connection,{apns_manager,start_link, []},
 	          permanent,2000,worker,[apns_manager]},
-    {ok,{{simple_one_for_one,0,1}, [Connection]}}.
+    {ok,{{simple_one_for_one,20,10}, [Connection]}}.
 
 %% ====================================================================
 %% Internal functions

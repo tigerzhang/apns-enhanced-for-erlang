@@ -20,6 +20,7 @@
 -export([estimate_available_bytes/1]).
 -export([message_id/0, expiry/1, timestamp/1]).
 -export([default_connection/0]).
+-export([send_message_block/2]).
 
 -type status() :: no_errors | processing_error | missing_token | missing_topic | missing_payload |
                   missing_token_size | missing_topic_size | missing_payload_size | invalid_token |
@@ -211,3 +212,8 @@ default_connection() ->
                               feedback_host   = get_env(feedback_host,    DefaultConn#apns_connection.feedback_host),
                               feedback_port   = get_env(feedback_port,    DefaultConn#apns_connection.feedback_port)
                              }.
+
+-spec send_message_block(conn_id(), #apns_msg{}) -> ok.
+send_message_block(ConnId, Msg) ->
+  apns_connection:send_message_block(ConnId, Msg).
+  

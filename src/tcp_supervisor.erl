@@ -34,15 +34,15 @@ stop(_S) ->
 %% Supervisor behaviour callbacks
 %%----------------------------------------------------------------------
 init([apns_sup]) ->
-	{ok, {{one_for_one, 3, 10},
+	{ok, {{one_for_one, 20, 10},
 		  [{apns_sup, {apns_sup, start_link, []},
-      transient, 5000, supervisor, [apns_sup]}
+      permanent, 5000, supervisor, [apns_sup]}
 		  ]}};
 
 init([apns_manager_sup]) ->
-	{ok, {{one_for_one, 3, 10},
+	{ok, {{one_for_one, 20, 10},
 		  [{apns_manager_sup, {apns_manager_sup, start_link, []},
-			transient, 5000, supervisor, [apns_manager_sup]}
+			permanent, 5000, supervisor, [apns_manager_sup]}
 		  ]}};
 
 init([tcp_accept_supervisor]) ->
