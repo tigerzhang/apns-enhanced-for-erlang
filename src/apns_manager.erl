@@ -2,7 +2,7 @@
 %% @doc @todo Add description to apns_manager.
 
 -module(apns_manager).
--behaviour(gen_server).
+-behaviour(gen_server2).
 
 -include("apns.hrl").
 -include("localized.hrl").
@@ -46,6 +46,23 @@ init(MngId) ->
 	apns:connect(manager_id_to_connection_id(MngId), fun log_error/3, fun log_feedback/1),
 	erlang:send_after(?INTERVAL, self(), trigger),
 	{ok, #state{manager_id=MngId, messages_sent=[]}}.
+
+prioritise_cast(Msg, _Len, _State) ->
+	case Msg of
+		{rewind_position, _MsgId, _ConnPid} ->
+							9;
+		sendmsg 		->	7;
+		{sendmsg, _MngId, _MsgId, _DeviceToken, _Alert, _Badge, _Sound, _Expiry, _ExtraArgs} ->
+							7;
+		stop			->	5;
+		_ 				->	0
+	end.
+
+prioritise_info(Msg, _Len, _State) ->
+	case trigger of
+		trigger			-> 7;
+		_ 				-> 0
+	end.
 
 handle_cast({sendmsg, MngId, MsgId, DeviceToken, Alert, Badge, Sound, Expiry, ExtraArgs}, State) ->
 	MessagesSent = [{MsgId, #apns_msg{id=MsgId, expiry=Expiry, device_token=DeviceToken, alert=Alert,

@@ -6,14 +6,14 @@ CORRECT_DEVICE_TOKEN=130ab12bc1ef517bc574cb1199051a88057f6a9371028005f5e780cdb15
 ERROR_DEVICE_TOKEN=130ab12bc1ef517bc574cb1199051a88057f6a9371028005f5e780cdb1588d48
 
 APNSCMD=""
-for i in {41001..41010}
+for i in {41001..41003}
 do
 	APNSCMD=${APNSCMD}"apnsm PushTestDev4 ${CORRECT_DEVICE_TOKEN} ${DATE}-hello-${SID}-${i} ${i} chime 86400 {\"key\":${i}}\n"
 done
 echo -e ${APNSCMD} | ${NC}
 
 APNSCMD=""
-for i in {31001..31010}
+for i in {31001..31003}
 do
     APNSCMD=${APNSCMD}"apnsm PushTestDev3 ${CORRECT_DEVICE_TOKEN} ${DATE}-hello-${SID}-${i} ${i} chime 86400 {\"key\":${i}}\n"
 done
@@ -30,14 +30,14 @@ do
 done
 
 APNSCMD=""
-for i in {43001..43010}
+for i in {43001..43002}
 do
 	APNSCMD=${APNSCMD}"apnsm PushTestDev4 ${CORRECT_DEVICE_TOKEN} ${DATE}-hello-${SID}-${i} ${i} chime 86400 {\"key\":${i}}\n"
 done
 echo -e ${APNSCMD} | ${NC}
 
 APNSCMD=""
-for i in {33001..33010}
+for i in {33001..33002}
 do
 	APNSCMD=${APNSCMD}"apnsm PushTestDev3 ${CORRECT_DEVICE_TOKEN} ${DATE}-hello-${SID}-${i} ${i} chime 86400 {\"key\":${i}}\n"
 done
