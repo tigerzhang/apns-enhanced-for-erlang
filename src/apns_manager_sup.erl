@@ -1,4 +1,4 @@
-%% @author zhanghu
+%% @author Zhang Hu <iamzhanghu@gmail.com>
 %% @doc @todo Add description to apns_manager_sup.
 
 

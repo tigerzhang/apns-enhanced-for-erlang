@@ -3,6 +3,9 @@
 %% @copyright (C) 2010 Fernando Benavides <fernando.benavides@inakanetworks.com>
 %% @doc Apple Push Notification Server for Erlang
 %% @end
+%%
+%% Add send_message_block by Zhang Hu <iamzhanghu@gmail.com>
+%%
 %%-------------------------------------------------------------------
 -module(apns).
 -vsn('1.0').

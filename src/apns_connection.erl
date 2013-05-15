@@ -3,6 +3,12 @@
 %%% @copyright (C) 2010 Fernando Benavides <fernando.benavides@inakanetworks.com>
 %%% @doc apns4erl connection process
 %%% @end
+%%%
+%%% Added by Zhang Hu <iamzhanghu@gmail.com>:
+%%% - add send_message_block
+%%% - remove feedback connection
+%%% - add a parameter of error callback
+%%%
 %%%-------------------------------------------------------------------
 -module(apns_connection).
 -author('Fernando Benavides <fernando.benavides@inakanetworks.com>').

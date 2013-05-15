@@ -66,15 +66,11 @@ run_mng: all
 		erl -noinput ${RUN} -run apns_manager_app start; \
 	fi
 
-NC := nc localhost 2222
-DATE := `date +"%m%d-%H:%M:%S"`
-CORRECT_DEVICE_TOKEN := 130ab12bc1ef517bc574cb1199051a88057f6a9371028005f5e780cdb1588d49
-ERROR_DEVICE_TOKEN := 130ab12bc1ef517bc574cb1199051a88057f6a9371028005f5e780cdb1588d48
 test_mng: all test_mng_cases
-	erl -boot start_sasl ${RUN}  -s appmon -s apns -sname test_mng &
+	erl -boot start_sasl +Bc +K true -smp enable -pa ebin -s crypto -s inets -s ssl -s appmon -s apns -sname test_mng -detached
 	sleep 10
-	./test_data.sh
-	# sleep 60
-	# kill `pgrep -f "beam.*-sname test_mng"`
+	./test_data.sh localhost 1
+	sleep 60
+	kill `pgrep -f "beam.*-sname test_mng"`
 
 .PHONY: test_mng run
