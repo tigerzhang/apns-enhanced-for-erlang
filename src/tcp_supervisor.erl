@@ -17,6 +17,8 @@ start_tcp_socket_handler() ->
 %% Application behaviour callbacks
 %%----------------------------------------------------------------------
 start(_Type, _Args) ->
+  udp_server_sup:start_link(),
+  udp_server_sup:start_child(),
   pg2:create(accept_handlers),
   pg2:create(socket_handlers),
   supervisor:start_link(?MODULE, [apns_sup]),

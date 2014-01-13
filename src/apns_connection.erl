@@ -20,7 +20,7 @@
 
 -export([start_link/1, start_link/2, init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -export([send_message/2, stop/1]).
--export([build_payload/1]).
+-export([build_payload/1, build_payload/2]).
 -export([send_message_block/2]).
 
 -record(state, {out_socket        :: tuple(),
@@ -276,8 +276,13 @@ build_payload(#apns_msg{alert = Alert,
                    {sound, Sound}], Extra).
 
 build_payload(Params, Extra) ->
-  apns_mochijson2:encode(
-    {[{<<"aps">>, do_build_payload(Params, [])} | Extra]}).
+  case Params of
+    [{alert, undefined}, {badge, undefined}, {sound, undefined}] ->
+      mochijson2:encode(Extra);
+    _ ->
+      apns_mochijson2:encode(
+        {[{<<"aps">>, do_build_payload(Params, [])} | Extra]})
+  end.
 do_build_payload([{Key,Value}|Params], Payload) ->
   case Value of
     Value when is_list(Value); is_binary(Value) ->

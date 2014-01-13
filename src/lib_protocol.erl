@@ -96,6 +96,14 @@ protocol(Socket, State, "apnsm", Args) ->
       Badge, Sound, Expiry, ExtraArgsJson)
   catch
     _:{Error, Reason} -> gen_tcp:send(Socket, io_lib:format("error ~p~n", [{Error, Reason}]))
+  end;
+
+protocol(Socket, State, "apnsjson", Args) ->
+  try
+    [Name, DeviceToken, Json] = Args,
+    apns_manager:send_message(Name, DeviceToken, Json)
+  catch
+    _:{Error, Reason} -> gen_tcp:send(Socket, io_lib:format("error ~p~n", [{Error, Reason}]))
   end.
 
 message_id() ->

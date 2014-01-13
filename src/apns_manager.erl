@@ -18,11 +18,12 @@
 %% ====================================================================
 %% API functions
 %% ====================================================================
--export([start_link/1, send_message/8, handle_call/3, handle_cast/2,
+-export([start_link/1, handle_call/3, handle_cast/2,
 		 handle_info/2, init/1, terminate/2, code_change/3]).
 -export([start_manager/1]).
 
 -export([manager_id_to_connection_id/1, connection_id_to_manager_id/1]).
+-export([send_message/8, send_message/3]).
 
 %% start_link/1
 -spec start_link([]) -> {ok, pid()} | {error, {already_started, pid()}}.
@@ -176,10 +177,20 @@ find_message_id_backward(Messages, CurPos, MsgId) ->
 			find_message_id_backward(Messages, Pos - 1, MsgId)
 	end.
 
+-spec send_message(string(), string(), string(), string(), integer(),
+	string(), integer(), string()) -> ok.
 send_message(MngId, MsgId, DeviceToken, Alert, Badge, Sound, Expiry, ExtraArgs) ->
 	gen_server:cast(MngId, {
 		sendmsg, MngId, MsgId,
 		DeviceToken, Alert, Badge, Sound, Expiry, ExtraArgs}).
+
+-spec send_message(string(), string(), string()) -> ok.
+send_message(Name, DeviceToken, Json) ->
+	MngId = list_to_atom(Name),
+    apns_manager:start_manager(MngId),
+    {struct, ExtraArgsJson} = mochijson2:decode(Json),
+    apns_manager:send_message(MngId, apns:message_id(), DeviceToken, undefined,
+      undefined, undefined, apns:expiry(86400), ExtraArgsJson).
 
 %% @hidden
 -spec handle_call(X, reference(), state()) -> {stop, {unknown_request, X}, {unknown_request, X}, state()}.
@@ -192,7 +203,7 @@ handle_call(Request, _From, State) ->
 handle_info(trigger, State) ->
 	%% try to remove old messages
 	RevertMessagesSent = lists:reverse(State#state.messages_sent),
-	MessageTryToDeleteInOneLoop = 1,
+	MessageTryToDeleteInOneLoop = 100,
 
 	%% delete the message and adjust the cursor
 	{CurPos, RevertMessagesSent3} = 

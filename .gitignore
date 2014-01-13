@@ -2,3 +2,5 @@
 .settings
 priv/cert.pem
 ebin/*
+.idea
+
