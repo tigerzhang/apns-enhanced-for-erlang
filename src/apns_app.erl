@@ -19,6 +19,8 @@
 %% @hidden
 -spec start(normal | {takeover, node()} | {failover, node()}, term()) -> {ok, pid()} | {error, term()}.
 start(_StartType, _StartArgs) ->
+    lager:log(info, self(), "apns_app:start()"),
+    apns_mq_handler_sup:start_link(),
     apns_sup:start_link().
 
 %% @hidden

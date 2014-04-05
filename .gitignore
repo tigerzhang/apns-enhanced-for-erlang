@@ -4,3 +4,6 @@ priv/cert.pem
 ebin/*
 .idea
 
+rel/apns
+apns.iml
+erlcinfo

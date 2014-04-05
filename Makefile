@@ -1,76 +1,28 @@
-RUN := +Bc +K true -smp enable -pa ebin -sname apnsmng -s crypto -s inets -s ssl
+REBAR = ./rebar -j8
+all: deps compile
 
-all:
-	rebar get-deps && rebar compile
+compile: deps
+	${REBAR} compile
+
+deps:
+	${REBAR} get-deps
 
 clean:
-	rebar clean
+	${REBAR} clean
 
-build_plt: all
-	rebar skip_deps=true build-plt
+generate: compile
+	cd rel && ../${REBAR} generate -f
 
-analyze: all
-	rebar dialyze
+relclean:
+	rm -rf rel/apns
 
-update-deps:
-	rebar update-deps
+run: generate
+	./rel/apns/bin/apns start
 
-doc: all
-	rebar skip_deps=true doc
+console: generate
+	./rel/apns/bin/apns console
 
-xref: all
-	rebar skip_deps=true xref
+erl: compile
+	erl -pa ebin/ -pa lib/*/ebin/ -s apns
 
-debug: all
-	erl  -boot start_sasl ${RUN} -s apns -s appmon -s debugger
-
-run: all
-	if [ -f `hostname`.config ]; then\
-		erl  -config `hostname` -boot start_sasl ${RUN} -s apns;\
-	else\
-		erl  -boot start_sasl ${RUN} -s apns;\
-	fi
-
-shell: all
-	if [ -f `hostname`.config ]; then\
-		erl  -config `hostname` -boot start_sasl ${RUN};\
-	else\
-		erl  -boot start_sasl ${RUN};\
-	fi
-
-test: all
-	if [ -f `hostname`.config ]; then\
-		erl -noshell -noinput -config `hostname` ${RUN} -run apns_tests main;\
-	else\
-		erl -noshell -noinput ${RUN} -run apns_tests main;\
-	fi
-
-test_mng_cases: all
-	if [ -f `hostname`.config ]; then\
-		erl -noshell -noinput -config `hostname` ${RUN} -run apns_manager_tests main;\
-	else\
-		erl -noshell -noinput ${RUN} -run apns_manager_tests main;\
-	fi
-
-test_tcp: all
-	if [ -f `hostname`.config ]; then\
-		erl -noshell -noinput -config `hostname` ${RUN} -run tcp_server_tests main;\
-	else\
-		erl -noshell -noinput ${RUN} -run tcp_server_tests main;\
-	fi
-
-run_mng: all
-	if [ -f `hostname`.config ]; then \
-		erl -noinput -config `hostname` ${RUN} -run apns_manager_app start; \
-	else \
-		erl -noinput ${RUN} -run apns_manager_app start; \
-	fi
-
-test_mng: all test_mng_cases
-	erl -boot start_sasl +Bc +K true -smp enable -pa ebin -s crypto -s inets -s ssl -s appmon -s apns -sname test_mng -detached
-	sleep 10
-	./test_data.sh localhost 1
-	sleep 60
-	kill `pgrep -f "beam.*-sname test_mng"`
-
-.PHONY: test_mng run
+.PHONY: deps compile generate

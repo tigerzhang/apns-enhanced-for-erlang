@@ -26,7 +26,7 @@ start(_Type, _Args) ->
   {ok, Pid} = supervisor:start_link(?MODULE, [tcp_listen_handler, 2222, 1024]),
   supervisor:start_link(?MODULE, [tcp_accept_supervisor]),
   supervisor:start_link(?MODULE, [tcp_socket_supervisor]),
-  [start_tcp_accept_handler() || _ <- lists:seq(1,100)],
+  [start_tcp_accept_handler() || _ <- lists:seq(1,5)],
   {ok, Pid}.
 
 stop(_S) ->

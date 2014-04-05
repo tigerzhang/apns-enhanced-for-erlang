@@ -40,6 +40,10 @@
 %% @doc Starts the application
 -spec start() -> ok | {error, {already_started, apns}}.
 start() ->
+    application:start(lager),
+    application:start(rabbit_common),
+    application:start(amqp_client),
+    _ = applications:start(msgbus_amqp_proxy),
   _ = application:start(public_key),
   _ = application:start(ssl),
   application:start(apns).
