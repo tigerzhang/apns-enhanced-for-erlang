@@ -40,13 +40,33 @@
 %% @doc Starts the application
 -spec start() -> ok | {error, {already_started, apns}}.
 start() ->
-    application:start(lager),
-    application:start(rabbit_common),
-    application:start(amqp_client),
-    _ = applications:start(msgbus_amqp_proxy),
-  _ = application:start(public_key),
-  _ = application:start(ssl),
-  application:start(apns).
+    io:format("~p~n", [application:start(asn1)]),
+    io:format("~p~n", [application:start(crypto)]),
+    io:format("~p~n", [application:start(public_key)]),
+    io:format("~p~n", [application:start(ssl)]),
+    io:format("~p~n", [application:start(syntax_tools)]),
+    io:format("~p~n", [application:start(compiler)]),
+    io:format("~p~n", [application:start(goldrush)]),
+    io:format("~p~n", [application:start(lager)]),
+%%     lager:start(),
+    io:format("~p~n", [application:start(rabbit_common)]),
+    io:format("~p~n", [application:start(amqp_client)]),
+    io:format("~p~n", [application:start(msgbus_amqp_proxy)]),
+    io:format("~p~n", [application:start(apns)]).
+
+%%     start(apns).
+
+start(App) ->
+    start_ok(App, application:start(App, permanent)).
+
+start_ok(App, ok) -> io:format("app ~p started~n", [App]), ok;
+start_ok(_App, {error, {already_started, _App}}) -> ok;
+start_ok(App, {error, {not_started, Dep}}) ->
+    io:format("start dep[~p]~n", [Dep]),
+    ok = start(Dep),
+    start(App);
+start_ok(App, {error, Reason}) ->
+    erlang:error({app_start_failed, App, Reason}).
 
 %% @doc Stops the application
 -spec stop() -> ok.

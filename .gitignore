@@ -7,3 +7,6 @@ ebin/*
 rel/apns
 apns.iml
 erlcinfo
+log
+certs
+erl_crash.dump
